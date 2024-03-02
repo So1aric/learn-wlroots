@@ -30,9 +30,12 @@ foreach filename: wl_proto_files
   wl_proto_src += wl_scannr_head.process(filename)
 endforeach
 
+math = cc.find_library('m')
+
 wlroots = cc.find_library('wlroots')
 
 pixman = dependency('pixman-1')
+xkbcommon = dependency('xkbcommon')
 
 add_project_arguments([
   '-DWLR_USE_UNSTABLE',
@@ -45,8 +48,13 @@ executable(
     wl_proto_src,
   ],
   dependencies: [
+    math,
+    wl_server,
     wlroots,
     pixman,
-    wl_server,
+    xkbcommon,
+  ],
+  include_directories: [
+    'include',
   ],
 )
