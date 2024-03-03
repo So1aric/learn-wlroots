@@ -83,6 +83,8 @@ typedef struct server {
     struct wl_listener new_input;
     struct wl_listener request_cursor;
     struct wl_listener request_set_selection;
+
+    PhysicsBody floor;
 } Server;
 
 typedef struct output {
@@ -191,6 +193,25 @@ server_listener(new_output, data) {
     wl_list_insert(&server->outputs, &output->link);
 
     /* struct wlr_output_layout_output *layout_output =*/ wlr_output_layout_add_auto(server->output_layout, wlr_output);
+
+    // We add a floor and two walls for the new output
+    PhysicsBody floor = CreatePhysicsBodyRectangle(
+        (Vector2){ (float)wlr_output->width / 2, wlr_output->height },
+        wlr_output->width, 1, 1
+    );
+    floor->enabled = false;
+
+    PhysicsBody left_wall = CreatePhysicsBodyRectangle(
+        (Vector2){ 0, (float)wlr_output->height / 2 },
+        1, wlr_output->height, 1
+    );
+    left_wall->enabled = false;
+
+    PhysicsBody right_wall = CreatePhysicsBodyRectangle(
+        (Vector2){ wlr_output->width, (float)wlr_output->height / 2 },
+        1, wlr_output->height, 1
+    );
+    right_wall->enabled = false;
 }
 
 server_listener(new_xdg_surface, data) {
@@ -202,7 +223,8 @@ server_listener(new_xdg_surface, data) {
     Toplevel *toplevel = malloc(sizeof(*toplevel));
     toplevel->server = server;
     toplevel->base = xdg_toplevel;
-    toplevel->pos.x = 300;
+    Output *output = wl_container_of(server->outputs.next, output, link);
+    toplevel->pos.x = (float)output->base->width / 2;
     toplevel->pos.y = -400;
     toplevel->body = NULL;
 
@@ -352,7 +374,7 @@ output_listener(frame, data) {
 
         float proj[9];
         wlr_matrix_identity(proj);
-        wlr_matrix_translate(proj, position.x + half_width, position.y + half_height);
+        wlr_matrix_translate(proj, position.x, position.y);
         wlr_matrix_rotate(proj, rotation);
 
         wlr_render_texture(
@@ -402,6 +424,7 @@ toplevel_listener(map, data) {
     // Here we have enough information to create a physics object.
     if (toplevel->body) return;
     toplevel->body = CreatePhysicsBodyRectangle(toplevel->pos, toplevel->size.x, toplevel->size.y, 1);
+    SetPhysicsBodyRotation(toplevel->body, (float)rand() / RAND_MAX);
 }
 
 toplevel_listener(unmap, data) {
@@ -527,16 +550,11 @@ int main(int argc, char** argv) {
     InitPhysics();
     SetPhysicsGravity(0, 1);
 
-    // We always add a static ground
-    PhysicsBody floor = CreatePhysicsBodyRectangle((Vector2){ 0, 500 }, 10000, 10, 1);
-    floor->enabled = false;
-    SetPhysicsBodyRotation(floor, 0.05);
-
     wlr_backend_start(server.backend);
     // setenv("WAYLAND_DISPLAY", socket, true);
 
     if (fork() == 0) {
-        execl("/bin/sh", "/bin/sh", "-c", "WAYLAND_DISPLAY=wayland-0 foot -w 600x400", NULL);
+        execl("/bin/sh", "/bin/sh", "-c", "WAYLAND_DISPLAY=wayland-0 foot", NULL);
     }
 
     wl_display_run(server.display);
